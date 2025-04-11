@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Metrics Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"
+    />
+     <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body class="bg-gray-100 p-4">
+    <div class="card max-w-4xl mx-auto mt-8">
+      <div id="progressLine" class="progress-line"></div>
+      <div class="p-6 border-b">
+        <h2 class="text-xl font-bold">Metrics Dashboard</h2>
+        <div id="errorAlert" class="alert">
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12" y2="16" />
+          </svg>
+          <span id="errorMessage"></span>
+        </div>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <div class="space-y-2">
+          <label class="text-base font-semibold text-gray-700">Data Source</label>
+          <select id="datasource" class="w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+            <option value="appd">AppDynamics</option>
+            <option value="grafana">Grafana</option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-base font-semibold text-gray-700">Authentication</label>
+          
+          <!-- Token Authentication Fields -->
+          <div id="tokenAuth" class="auth-fields active">
+            <input
+              type="text"
+              id="token"
+              placeholder="Enter your authentication token"
+              class="font-mono"
+            />
+          </div>
+
+          <!-- Username/Password Authentication Fields -->
+          <div id="credentialsAuth" class="auth-fields space-y-2">
+            <input
+              type="text"
+              id="username"
+              placeholder="Username"
+              class="mb-2"
+            />
+            <input type="password" id="password" placeholder="Password" />
+            
+            <!-- Grafana Data Source Selection -->
+            <div id="grafanaDataSource" class="mt-4 hidden space-y-2">
+              <label class="text-base font-semibold text-gray-700">Data Stream</label>
+              <div class="space-x-4">
+                <label class="inline-flex items-center">
+                  <input type="radio" name="dataStream" value="odc" class="form-radio" checked>
+                  <span class="ml-2">ODC</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="radio" name="dataStream" value="mdc" class="form-radio">
+                  <span class="ml-2">MDC</span>
+                </label>
+              </div>
+
+              <!-- Namespace Search Section -->
+              <div class="space-y-2 mt-4">
+                <label class="text-base font-semibold text-gray-700">Namespace</label>
+                <div class="namespace-container relative">
+                  <input
+                    type="text"
+                    id="namespaceInput"
+                    placeholder="Type to search namespaces..."
+                    class="w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <div id="namespaceResults" class="search-results absolute hidden w-full mt-1 rounded-md shadow-lg bg-white">
+                    <!-- Results will be populated here -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Workload Search Section -->
+              <div class="space-y-2 mt-4">
+                <label class="text-base font-semibold text-gray-700">Workload</label>
+                <div class="workload-container relative">
+                  <input
+                    type="text"
+                    id="workloadInput"
+                    placeholder="Type to search workloads..."
+                    class="w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <div id="workloadResults" class="search-results absolute hidden w-full mt-1 rounded-md shadow-lg bg-white">
+                    <!-- Results will be populated here -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AppDynamics Specific Controls -->
+        <div id="appdControls" class="space-y-6">
+          <!-- Applications Search Section -->
+          <div class="space-y-2">
+            <label class="text-base font-semibold text-gray-700">Applications</label>
+            <div class="application-container">
+              <input
+                type="text"
+                id="applicationInput"
+                placeholder="Type to search applications..."
+                class="w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+              <div id="applicationResults" class="search-results hidden">
+                <!-- Results will be populated here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Services Search Section -->
+          <div class="space-y-2">
+            <label class="text-base font-semibold text-gray-700">Services</label>
+            <div class="service-container">
+              <input
+                type="text"
+                id="serviceInput"
+                placeholder="Select an application first..."
+                class="w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                disabled
+              />
+              <div id="serviceResults" class="search-results hidden">
+                <!-- Results will be populated here -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-base font-semibold text-gray-700">Start Date & Time</label>
+            <div class="datetime-wrapper space-x-2">
+              <input type="date" id="startDate" />
+              <input type="time" id="startTime" step="1" />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-base font-semibold text-gray-700">End Date & Time</label>
+            <div class="datetime-wrapper space-x-2">
+              <input type="date" id="endDate" />
+              <input type="time" id="endTime" step="1" />
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-base font-semibold text-gray-700">Available Metrics</label>
+          <div id="metricsGrid" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <!-- Metrics will be inserted here -->
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button id="fetchButton" class="btn-success">
+            <svg
+              id="refreshIcon"
+              class="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                d="M3 12h1m8-9v1m8 8h1m-9 8v1M5.6 5.6l.7.7m12.1-.7l-.7.7m0 11.4l.7.7m-12.1-.7l-.7.7"
+              />
+            </svg>
+            Fetch
+          </button>
+          <button id="downloadButton" class="btn-primary">
+            <svg
+              class="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <path d="M7 10l5 5 5-5" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download
+          </button>
+        </div>
+      </div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>
