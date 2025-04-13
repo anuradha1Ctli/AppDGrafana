@@ -672,15 +672,15 @@ app.get('/api/grafana/metrics/cpu-requests', async (req, res) => {
       data: {
         resultType: "vector",
         result: [
-          // {
-          //   metric: {
-          //     pod: "bmp-service-availability-business-service-test1-7855f8cf69zr2jd"
-          //   },
-          //   value: [
-          //     1743665399,
-          //     "0.5"
-          //   ]
-          // }
+          {
+             metric: {
+               pod: "bmp-service-availability-business-service-test1-7855f8cf69zr2jd"
+             },
+             value: [
+               1743665399,
+               "0.5"
+             ]
+           }
         ]
       }
     });

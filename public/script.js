@@ -382,8 +382,8 @@ const Metrics = {
     // Get the CPU requests value
     const cpuRequests = parseFloat(data.data.result[0].value[1]);
     
-    // Convert to millicores (multiply by 1000)
-    return (cpuRequests).toFixed(0);
+    
+    return (cpuRequests);
   },
 
   // Fetch Memory usage metrics from Grafana
