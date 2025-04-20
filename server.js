@@ -3,9 +3,35 @@ import fetch from "node-fetch";
 import express from "express";
 import { extractMaxValue } from './public/js/max_value.js';
 import https from 'https';
+import dotenv from "dotenv";
 
+// Load environment variables from .env file
+dotenv.config();
+
+console.log('Loaded environment variables:', {
+  username: process.env.GRAFANA_USERNAME,
+  password: process.env.PASSWORD
+});
+
+// const express = require('express');
 const app = express();
 const port = 3000; // You can change this if needed
+
+// Middleware to parse JSON
+app.use(express.json());
+
+// Serve static files from the "public" directory
+app.use(express.static('public'));
+
+// Get the authorization token from environment variables
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const AUTH_USERNAME = process.env.GRAFANA_USERNAME;
+const AUTH_PASSWORD = process.env.PASSWORD;
+
+if (!AUTH_TOKEN) {
+  console.error("Authorization token is not set in the environment variables.");
+  process.exit(1); // Exit the application if the token is missing
+}
 
 // Create an HTTPS agent that ignores certificate errors for internal APIs
 const httpsAgent = new https.Agent({
@@ -150,7 +176,7 @@ app.post('/api/applications/search', async (req, res) => {
   try {
     // Extract searchText from request body, NOT query
     const { searchText } = req.body;
-    const authHeader = req.headers.authorization;
+    const authHeader = AUTH_TOKEN;
 
     if (!authHeader) {
       return res.status(401).json({ error: 'Authorization token is required' });
@@ -197,7 +223,7 @@ app.post('/api/applications/search', async (req, res) => {
 app.post('/api/services/search', async (req, res) => {
   try {
     const { applicationId, startDateTime, endDateTime } = req.body;
-    const authHeader = req.headers.authorization;
+    const authHeader = AUTH_TOKEN;
 
     if (!authHeader) {
       return res.status(401).json({ error: 'Authorization token is required' });
@@ -264,7 +290,7 @@ async function fetchEntityStatsGraphData(componentId, authorization, startDateTi
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': authorization
+        'Authorization': AUTH_TOKEN
       }
     });
 
@@ -303,7 +329,7 @@ async function fetchExceptionsPerMinute(applicationId, componentId, authorizatio
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': authorization
+        'Authorization': AUTH_TOKEN
       }
     });
 
@@ -335,16 +361,27 @@ async function fetchExceptionsPerMinute(applicationId, componentId, authorizatio
 // Endpoint to fetch metrics data by name
 app.post('/api/metrics/byservicename', async (req, res) => {
   try {
+    console.log(`[${new Date().toISOString()}] Received request for /api/metrics/byservicename`);
+    console.log("Request body:", req.body);
+
     const { applicationId, nodeId, componentId, startDateTime, endDateTime } = req.body;
-    
+
+    // Validate required fields
+    if (!applicationId || !nodeId || !componentId || !startDateTime || !endDateTime) {
+      console.warn("Missing required parameters:", req.body);
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
     const timeRange = `Custom_Time_Range.BETWEEN_TIMES.${endDateTime}.${startDateTime}.0`;
-    
+    console.log("Constructed time range:", timeRange);
+
     // Fetch original metrics
+    console.log("Fetching original metrics...");
     const response = await fetch('https://centurylink-nonprod.saas.appdynamics.com/controller/restui/metricDataManager/getMetricDataByName', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization
+        'Authorization': AUTH_TOKEN
       },
       body: JSON.stringify({
         applicationId: applicationId,
@@ -363,23 +400,29 @@ app.post('/api/metrics/byservicename', async (req, res) => {
       })
     });
 
+    console.log("Original metrics response status:", response.status);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error("Error fetching original metrics:", errorText);
+      throw new Error(`Failed to fetch original metrics. Status: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log("Original metrics data:", JSON.stringify(data, null, 2));
 
-    console.log('nodeId:', nodeId);
-    console.log('ApplicationId  :', applicationId);
-    console.log('ComponentId    :', componentId);
-    
     // Fetch additional metrics
+    console.log("Fetching additional metrics...");
     const entityStatsGraphData = await fetchEntityStatsGraphData(componentId, req.headers.authorization, startDateTime, endDateTime);
+    console.log("Additional metrics data:", entityStatsGraphData);
 
     // Fetch exceptions per minute
+    console.log("Fetching exceptions per minute...");
     const exceptionsPerMinute = await fetchExceptionsPerMinute(applicationId, componentId, req.headers.authorization, startDateTime, endDateTime);
+    console.log("Exceptions per minute data:", exceptionsPerMinute);
 
     // Combine the two sets of metrics
+    console.log("Combining metrics...");
     const combinedMetrics = [
       ...data,
       {
@@ -408,9 +451,11 @@ app.post('/api/metrics/byservicename', async (req, res) => {
       }
     ];
 
+    console.log("Combined metrics:", JSON.stringify(combinedMetrics, null, 2));
+
     res.json(combinedMetrics);
   } catch (error) {
-    console.error('Error fetching metrics:', error);
+    console.error('Error in /api/metrics/byservicename:', error);
     res.status(500).json({ error: 'Failed to fetch metrics data' });
   }
 });
@@ -533,17 +578,18 @@ app.get('/api/grafana/metrics/cpu-usage', async (req, res) => {
       });
     }
 
-    const username = req.headers.username;
-    const password = req.headers.password;
+    const username = AUTH_USERNAME;
+    const password = AUTH_PASSWORD;
     const dataStream = req.headers.datastream;
+    console.log('Received headers:', { username, password ,dataStream});
 
-    if (!username || !password || !dataStream) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing authentication headers',
-        timestamp: new Date().toISOString()
-      });
-    }
+    // if (!username || !password || !dataStream) {
+    //   return res.status(400).json({ 
+    //     success: false, 
+    //     error: 'Missing authentication headers',
+    //     timestamp: new Date().toISOString()
+    //   });
+    // }
 
     // Construct the query for CPU usage
     const query = encodeURIComponent(`sum(
@@ -701,8 +747,8 @@ app.get('/api/grafana/metrics/memory-usage', async (req, res) => {
       });
     }
 
-    const username = req.headers.username;
-    const password = req.headers.password;
+    const username = AUTH_USERNAME;
+    const password = AUTH_PASSWORD;
     const dataStream = req.headers.datastream;
 
     if (!username || !password || !dataStream) {
@@ -853,6 +899,22 @@ app.get('/api/grafana/metrics/memory-limit', async (req, res) => {
       }
     });
   }
+});
+
+// Endpoint to fetch authentication details
+app.get('/api/auth', (req, res) => {
+  res.json({
+    token: process.env.BEARER_TOKEN,
+    username: process.env.GRAFANA_USERNAME,
+    password: process.env.PASSWORD
+  });
+});
+// Endpoint to expose .env values
+app.get('/api/env', (req, res) => {
+  res.json({
+    username: process.env.GRAFANA_USERNAME,
+    password: process.env.PASSWORD
+  });
 });
 
 app.listen(port, () => {

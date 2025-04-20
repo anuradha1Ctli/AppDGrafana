@@ -22,6 +22,16 @@ const CONFIG = {
   }
 };
 
+const JAVA_GAUGES_METRICS = [
+  'JVM|Memory:Heap|Current Usage (MB)',
+  'JVM|Memory:Heap|Max Available (MB)',
+  'JVM|Memory:Heap|Committed (MB)',
+  'JVM|Memory:Heap|Used %',
+  'JVM|Garbage Collection|GC Time Spent Per Min (ms)',
+  'JVM|Process CPU Usage %',
+  'JVM|Threads|Current No. of Threads'
+];
+
 // State management
 const state = {
   selectedAppDynamicsApplicationId: null,
@@ -73,17 +83,21 @@ const UI = {
 };
 
 // Authentication Module
+async function getAuthConfig() {
+  const response = await fetch('/api/auth');
+  const config = await response.json();
+  return config;
+}
 const Auth = {
-  getAuthorizationHeader() {
+  async getAuthorizationHeader() {
+    const config = await getAuthConfig();
     const dataSource = document.getElementById('datasource').value;
-    
+
     if (dataSource === 'appd') {
-      const token = document.getElementById('token').value;
-      return `Bearer ${token}`;
+      console.log('AppDynamics token:', config.token);
+      return 'config.token';
     } else if (dataSource === 'grafana') {
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      return 'Basic ' + btoa(`${username}:${password}`);
+      return 'Basic ' + btoa(`${config.username}:${config.password}`);
     }
     return '';
   },
@@ -99,15 +113,11 @@ const Auth = {
       const credentialsAuth = document.getElementById('credentialsAuth');
       
       if (dataSource === 'appd') {
-        tokenAuth.classList.add('active');
         credentialsAuth.classList.remove('active');
-        grafanaDataSource.classList.add('hidden');
         document.getElementById('namespaceResults').classList.add('hidden');
       } else if (dataSource === 'grafana') {
-        tokenAuth.classList.remove('active');
         credentialsAuth.classList.add('active');
         grafanaDataSource.classList.remove('hidden');
-        // Show namespace input container when Grafana is selected
         document.querySelector('.namespace-container').classList.remove('hidden');
       }
     };
@@ -175,36 +185,19 @@ const DateTime = {
 // Validation Module
 const Validation = {
   validateInputs() {
-    const tokenAuthActive = document.getElementById('tokenAuth').classList.contains('active');
     const dateRange = DateTime.getDateTimeRange();
-
-    if (tokenAuthActive && !document.getElementById('token').value.trim()) {
-      UI.showError('Please enter an authentication token');
-      return false;
-    }
-
-    if (!tokenAuthActive) {
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      if (!username.trim() || !password.trim()) {
-        UI.showError('Please enter both username and password');
-        return false;
-      }
-    }
-
     if (!dateRange.start || !dateRange.end) {
       UI.showError('Please select both start and end dates/times');
       return false;
     }
 
     // Check if DataStream is selected when using Grafana
-    if (!tokenAuthActive) {
+    
       const selectedDataStream = document.querySelector('input[name="dataStream"]:checked');
       if (!selectedDataStream) {
         UI.showError('Please select a data stream (ODC or MDC)');
         return false;
       }
-    }
 
     if (!state.selectedAppDynamicsApplicationId || !state.selectedAppDynamicsNodeId) {
       UI.showError('Please select both an application and a service');
@@ -216,6 +209,36 @@ const Validation = {
 };
 
 // Metrics Module
+async function loadEnvVariables() {
+  try {
+    const response = await fetch('/api/env');
+    if (!response.ok) {
+      throw new Error(`Failed to load environment variables: ${response.status}`);
+    }
+    const env = await response.json();
+    console.log('Loaded environment variables:', env);
+    return env;
+  } catch (error) {
+    console.error('Error loading environment variables:', error);
+    throw error;
+  }
+}
+
+async function getAuthDetails() {
+  try {
+    const response = await fetch('/api/auth');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch auth details: ${response.status}`);
+    }
+    const authDetails = await response.json();
+    console.log('Fetched auth details:', { ...authDetails, password: '***' }); // Mask password in logs
+    return authDetails;
+  } catch (error) {
+    console.error('Error fetching auth details:', error);
+    throw error;
+  }
+}
+
 const Metrics = {
   lastFetchedMetricsData: null,
 
@@ -252,19 +275,21 @@ const Metrics = {
     try {
       UI.showProgress();
 
+      // Load environment variables
+      const env = await loadEnvVariables();
+      const authDetails = await getAuthDetails(); // Fetch auth details from the backend
+      const username = authDetails.username;
+      const password = authDetails.password;
+      const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
+      console.log('Fetched auth details:', { ...authDetails, password: '***' }); // Mask password in logs
+      if (!username || !password) {
+        throw new Error('Username and password are required');
+      }
+
       // Get date/time range
       const dateRange = DateTime.getDateTimeRange();
       if (!dateRange) {
         throw new Error('Please select valid start and end date/time');
-      }
-
-      // Get authentication
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
-
-      if (!username || !password) {
-        throw new Error('Username and password are required');
       }
 
       // Construct the URL with query parameters
@@ -329,8 +354,9 @@ const Metrics = {
       }
 
       // Get authentication
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+      const authDetails = await getAuthDetails(); // Fetch auth details from the backend
+      const username = authDetails.username;
+      const password = authDetails.password;
       const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
 
       if (!username || !password) {
@@ -398,8 +424,9 @@ const Metrics = {
       }
 
       // Get authentication
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+      const authDetails = await getAuthDetails(); // Fetch auth details from the backend
+      const username = authDetails.username;
+      const password = authDetails.password;
       const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
 
       if (!username || !password) {
@@ -468,8 +495,9 @@ const Metrics = {
       }
 
       // Get authentication
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+      const authDetails = await getAuthDetails(); // Fetch auth details from the backend
+      const username = authDetails.username;
+      const password = authDetails.password;
       const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
 
       if (!username || !password) {
@@ -523,11 +551,16 @@ const Metrics = {
   },
 
   async fetchMetricsByServiceName() {
-    if (!Validation.validateInputs()) return;
+    if (!Validation.validateInputs()) {
+      console.warn("Validation failed for inputs.");
+      return;
+    }
 
     const dateRange = DateTime.getDateTimeRange();
+    console.log("Date range selected:", dateRange);
+
     UI.showProgress();
-    
+
     // Disable fetch button during API call
     const fetchButton = document.getElementById('fetchButton');
     fetchButton.disabled = true;
@@ -535,36 +568,51 @@ const Metrics = {
 
     try {
       const dataSource = document.getElementById('datasource').value;
-      
+      console.log("Selected data source:", dataSource);
+
       if (dataSource === 'appd') {
-        // Existing AppDynamics metrics fetch logic
+        console.log("Fetching metrics from AppDynamics...");
+        
+        // Prepare the request payload
+        const payload = {
+          applicationId: state.selectedAppDynamicsApplicationId,
+          nodeId: state.selectedAppDynamicsNodeId,
+          componentId: state.selectedAppDynamicsComponentId,
+          startDateTime: dateRange.start.getTime(),
+          endDateTime: dateRange.end.getTime()
+        };
+        console.log("Request payload:", payload);
+
         const response = await fetch('/api/metrics/byservicename', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': Auth.getAuthorizationHeader()
+            'Authorization': await Auth.getAuthorizationHeader()
           },
-          body: JSON.stringify({
-            applicationId: state.selectedAppDynamicsApplicationId,
-            nodeId: state.selectedAppDynamicsNodeId,
-            componentId: state.selectedAppDynamicsComponentId,
-            startDateTime: dateRange.start.getTime(),
-            endDateTime: dateRange.end.getTime()
-          })
+          body: JSON.stringify(payload)
         });
 
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+        console.log("Response status:", response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error response from server:", errorText);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
-        
+        console.log("Fetched metrics data:", data);
+
         this.lastFetchedMetricsData = data;
-        
+
+        // Update the UI with the fetched metrics
         this.updateMetricsDisplay(data);
-      } 
-      
+      } else {
+        console.warn("Unsupported data source:", dataSource);
+      }
     } catch (error) {
-      console.error('Error fetching metrics:', error);
-      UI.showError('Failed to fetch metrics data: ' + error.message);
+      console.error("Error fetching metrics:", error);
+      UI.showError("Failed to fetch metrics data: " + error.message);
     } finally {
       // Re-enable fetch button
       fetchButton.disabled = false;
@@ -666,7 +714,19 @@ const Metrics = {
       return;
     }
 
-    const metricsHtml = metricsData.map(metric => {
+    // Separate Java Gauges and other metrics
+    const javaGauges = [];
+    const otherMetrics = [];
+    metricsData.forEach(metric => {
+      if (JAVA_GAUGES_METRICS.includes(metric.metricName)) {
+        javaGauges.push(metric);
+      } else {
+        otherMetrics.push(metric);
+      }
+    });
+
+    // Render other metrics first
+    let metricsHtml = otherMetrics.map(metric => {
       const metricName = this.formatMetricName(metric.metricName);
       const unit = this.getMetricUnit(metric.metricName);
       const value = this.getValue(metric.dataPoints, metric.metricName);
@@ -677,9 +737,30 @@ const Metrics = {
           <div class="font-medium text-gray-700 mb-2">${metricName}</div>
           <div class="text-2xl font-semibold text-gray-900">${displayValue}</div>
           <div class="text-sm text-gray-500">${unit}</div>
-      </div>
+        </div>
       `;
     }).join('');
+
+    // Render Java Gauges section at the bottom if present
+    if (javaGauges.length > 0) {
+      metricsHtml += `
+  <div class="col-span-full font-semibold text-md mb-2 text-gray-800">Java Gauges</div>
+`;
+      metricsHtml += javaGauges.map(metric => {
+        const metricName = this.formatMetricName(metric.metricName);
+        const unit = this.getMetricUnit(metric.metricName);
+        const value = this.getValue(metric.dataPoints, metric.metricName);
+        const displayValue = this.formatMetricValue(value, unit);
+
+        return `
+          <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            <div class="font-medium text-gray-700 mb-2">${metricName}</div>
+            <div class="text-2xl font-semibold text-gray-900">${displayValue}</div>
+            <div class="text-sm text-gray-500">${unit}</div>
+          </div>
+        `;
+      }).join('');
+    }
 
     UI.metricsGrid.innerHTML = metricsHtml;
   },
@@ -768,8 +849,10 @@ const Search = {
       const startTimestamp = new Date(`${startDate}T${startTime}`).getTime() / 1000;
       const endTimestamp = new Date(`${endDate}T${endTime}`).getTime() / 1000;
   
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+      const env = await loadEnvVariables();
+      const authDetails = await getAuthDetails(); // Fetch auth details from the backend
+      const username = authDetails.username;
+      const password = authDetails.password;;
   
       const payload = {
         query: query,
@@ -781,6 +864,7 @@ const Search = {
       };
   
       console.log('Making request with payload:', { ...payload, password: '***' });
+      console.log('Payload being sent to /api/namespaces/search:', payload);
       
       try {
         const response = await fetch('/api/namespaces/search', {
@@ -845,9 +929,9 @@ const Search = {
       if (!dataStream) {
         throw new Error('Please select a data stream (ODC or MDC)');
       }
-
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+      const authDetails = await getAuthDetails();
+      const username = authDetails.username;
+      const password = authDetails.password;;
       if (!username || !password) {
         throw new Error('Please enter both username and password for Grafana');
       }
@@ -1275,8 +1359,9 @@ function setupEventListeners() {
         console.log('Date range:', dateRange);
         
         // Get authentication
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
+        const authDetails = await loadEnvVariables(); // Fetch auth details from the backend
+        const username = authDetails.username;
+        const password = authDetails.password;
         const dataStream = document.querySelector('input[name="dataStream"]:checked').value;
         
         if (!username || !password) {
